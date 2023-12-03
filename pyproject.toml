@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "emu2mqtt"
+version = "0.1.0"
+description = ""
+authors = ["dan <dan@lindow.io>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+pyserial = "^3.5"
+xmltodict = "^0.13.0"
+ha-mqtt-discoverable = "^0.13.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
