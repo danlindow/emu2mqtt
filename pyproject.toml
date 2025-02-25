@@ -8,9 +8,14 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.12"
 pyserial = "^3.5"
-xmltodict = "^0.13.0"
-ha-mqtt-discoverable = "^0.13.0"
+xmltodict = "^0.14.2"
+ha-mqtt-discoverable = "^0.16.4"
 
+[tool.poetry.scripts]
+emu2mqtt = 'emu2mqtt.base:run_app'
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.4"
 
 [build-system]
 requires = ["poetry-core"]
