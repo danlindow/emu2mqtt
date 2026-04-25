@@ -186,6 +186,16 @@ func (r *Reader) readLoop(ctx context.Context, port goserial.Port) {
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		r.logger.Debug("serial line", "line", line)
+
+		// A root opening tag (e.g. <InstantaneousDemand>) while the buffer is
+		// non-empty means we connected mid-stream and the previous message was
+		// truncated. Discard the partial buffer and start fresh.
+		if buf.Len() > 0 && strings.HasPrefix(line, "<") &&
+			!strings.HasPrefix(line, "</") && !strings.Contains(line, "</") {
+			r.logger.Debug("discarding truncated message, restarting")
+			buf.Reset()
+		}
+
 		buf.WriteString(line)
 		buf.WriteByte('\n')
 		if strings.HasPrefix(line, "</") {

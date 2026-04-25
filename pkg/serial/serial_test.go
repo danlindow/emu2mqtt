@@ -87,6 +87,31 @@ func TestParseMessage_Unsupported(t *testing.T) {
 	}
 }
 
+func TestParseMessage_TruncatedThenComplete(t *testing.T) {
+	// Simulates connecting mid-stream: partial first message concatenated with
+	// a full second message. The readLoop should discard the partial buffer when
+	// it sees the second opening tag, so parseMessage only ever sees clean XML.
+	// This test verifies parseMessage handles the complete second message alone.
+	complete := `<InstantaneousDemand>
+<DeviceMacId>0xd8d5b9000000c28c</DeviceMacId>
+<MeterMacId>0x001c6400135bce4c</MeterMacId>
+<TimeStamp>0x317fa638</TimeStamp>
+<Demand>0x0001de</Demand>
+<Multiplier>0x00000003</Multiplier>
+<Divisor>0x000003e8</Divisor>
+<DigitsRight>0x03</DigitsRight>
+<DigitsLeft>0x05</DigitsLeft>
+<SuppressLeadingZero>Y</SuppressLeadingZero>
+</InstantaneousDemand>`
+	m, err := parseMessage(complete)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if m == nil || m.SensorName != "HomeCurrentDemand" {
+		t.Errorf("expected HomeCurrentDemand metric, got %+v", m)
+	}
+}
+
 func TestParseMessage_InvalidHex(t *testing.T) {
 	raw := `<InstantaneousDemand>
 <Demand>not-hex</Demand>
