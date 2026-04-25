@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"flag"
@@ -56,7 +56,6 @@ func LoadConfig() (*Config, error) {
 	return cfg, nil
 }
 
-// firstNonEmpty returns the first non-empty string from the candidates.
 func firstNonEmpty(values ...string) string {
 	for _, v := range values {
 		if v != "" {

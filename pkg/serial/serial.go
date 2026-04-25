@@ -1,4 +1,4 @@
-package main
+package serial
 
 import (
 	"bufio"
@@ -11,22 +11,23 @@ import (
 	"strings"
 	"time"
 
-	"go.bug.st/serial"
+	"github.com/danlindow/emu2mqtt/pkg/config"
+	goserial "go.bug.st/serial"
 )
 
-// InstantaneousDemand is a real-time power reading from the EMU-2.
+// instantaneousDemand is a real-time power reading from the EMU-2.
 // All numeric fields are hex strings (e.g. "0x000254").
-type InstantaneousDemand struct {
-	XMLName             xml.Name `xml:"InstantaneousDemand"`
-	Demand              string   `xml:"Demand"`
-	Multiplier          string   `xml:"Multiplier"`
-	Divisor             string   `xml:"Divisor"`
-	DigitsRight         string   `xml:"DigitsRight"`
+type instantaneousDemand struct {
+	XMLName     xml.Name `xml:"InstantaneousDemand"`
+	Demand      string   `xml:"Demand"`
+	Multiplier  string   `xml:"Multiplier"`
+	Divisor     string   `xml:"Divisor"`
+	DigitsRight string   `xml:"DigitsRight"`
 }
 
-// CurrentSummationDelivered is a cumulative energy reading from the EMU-2.
+// currentSummationDelivered is a cumulative energy reading from the EMU-2.
 // All numeric fields are hex strings.
-type CurrentSummationDelivered struct {
+type currentSummationDelivered struct {
 	XMLName            xml.Name `xml:"CurrentSummationDelivered"`
 	SummationDelivered string   `xml:"SummationDelivered"`
 	Multiplier         string   `xml:"Multiplier"`
@@ -80,7 +81,7 @@ func computeValue(rawValue, rawMultiplier, rawDivisor, rawDigitsRight string) (f
 func parseMessage(buf string) (*Metric, error) {
 	buf = strings.TrimSpace(buf)
 	if strings.Contains(buf, "<InstantaneousDemand>") {
-		var msg InstantaneousDemand
+		var msg instantaneousDemand
 		if err := xml.Unmarshal([]byte(buf), &msg); err != nil {
 			return nil, fmt.Errorf("unmarshal InstantaneousDemand: %w", err)
 		}
@@ -91,7 +92,7 @@ func parseMessage(buf string) (*Metric, error) {
 		return &Metric{SensorName: "HomeCurrentDemand", Value: val}, nil
 	}
 	if strings.Contains(buf, "<CurrentSummationDelivered>") {
-		var msg CurrentSummationDelivered
+		var msg currentSummationDelivered
 		if err := xml.Unmarshal([]byte(buf), &msg); err != nil {
 			return nil, fmt.Errorf("unmarshal CurrentSummationDelivered: %w", err)
 		}
@@ -104,21 +105,21 @@ func parseMessage(buf string) (*Metric, error) {
 	return nil, nil
 }
 
-// SerialReader manages the serial port connection and XML parsing.
-type SerialReader struct {
-	cfg     *Config
+// Reader manages the serial port connection and XML parsing.
+type Reader struct {
+	cfg     *config.Config
 	metrics chan<- Metric
 	logger  *slog.Logger
 }
 
-// NewSerialReader creates a SerialReader that sends parsed metrics to the provided channel.
-func NewSerialReader(cfg *Config, metrics chan<- Metric, logger *slog.Logger) *SerialReader {
-	return &SerialReader{cfg: cfg, metrics: metrics, logger: logger}
+// NewReader creates a Reader that sends parsed metrics to the provided channel.
+func NewReader(cfg *config.Config, metrics chan<- Metric, logger *slog.Logger) *Reader {
+	return &Reader{cfg: cfg, metrics: metrics, logger: logger}
 }
 
 // Run opens the serial port and reads forever, reconnecting on error.
 // Blocks until ctx is cancelled.
-func (r *SerialReader) Run(ctx context.Context) {
+func (r *Reader) Run(ctx context.Context) {
 	delay := time.Second
 	for {
 		port, err := r.openPort(ctx)
@@ -154,14 +155,14 @@ func (r *SerialReader) Run(ctx context.Context) {
 	}
 }
 
-func (r *SerialReader) openPort(ctx context.Context) (serial.Port, error) {
+func (r *Reader) openPort(ctx context.Context) (goserial.Port, error) {
 	delay := time.Second
 	for {
-		port, err := serial.Open(r.cfg.SerialDevice, &serial.Mode{
+		port, err := goserial.Open(r.cfg.SerialDevice, &goserial.Mode{
 			BaudRate: 115200,
 			DataBits: 8,
-			Parity:   serial.NoParity,
-			StopBits: serial.OneStopBit,
+			Parity:   goserial.NoParity,
+			StopBits: goserial.OneStopBit,
 		})
 		if err == nil {
 			r.logger.Info("serial port opened", "device", r.cfg.SerialDevice)
@@ -179,7 +180,7 @@ func (r *SerialReader) openPort(ctx context.Context) (serial.Port, error) {
 	}
 }
 
-func (r *SerialReader) readLoop(ctx context.Context, port serial.Port) {
+func (r *Reader) readLoop(ctx context.Context, port goserial.Port) {
 	scanner := bufio.NewScanner(port)
 	var buf strings.Builder
 	for scanner.Scan() {

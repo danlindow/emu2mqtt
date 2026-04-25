@@ -2,8 +2,9 @@ FROM golang:1.23-alpine AS builder
 WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
-COPY *.go ./
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o emu2mqtt .
+COPY cmd/ cmd/
+COPY pkg/ pkg/
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o emu2mqtt ./cmd/emu2mqtt
 
 FROM alpine:3.21
 RUN apk add --no-cache ca-certificates

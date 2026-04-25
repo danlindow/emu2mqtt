@@ -1,4 +1,4 @@
-package main
+package mqtt
 
 import (
 	"context"
@@ -8,7 +8,8 @@ import (
 	"strconv"
 	"time"
 
-	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"github.com/danlindow/emu2mqtt/pkg/config"
+	paho "github.com/eclipse/paho.mqtt.golang"
 )
 
 type haDevice struct {
@@ -49,38 +50,38 @@ var sensors = []sensorDef{
 	},
 }
 
-// MQTTPublisher manages the MQTT connection and publishes HA discovery and state messages.
-type MQTTPublisher struct {
-	cfg    *Config
-	client mqtt.Client
+// Publisher manages the MQTT connection and publishes HA discovery and state messages.
+type Publisher struct {
+	cfg    *config.Config
+	client paho.Client
 	logger *slog.Logger
 }
 
-// NewMQTTPublisher creates an MQTTPublisher. Call Connect before publishing.
-func NewMQTTPublisher(cfg *Config, logger *slog.Logger) *MQTTPublisher {
-	return &MQTTPublisher{cfg: cfg, logger: logger}
+// NewPublisher creates a Publisher. Call Connect before publishing.
+func NewPublisher(cfg *config.Config, logger *slog.Logger) *Publisher {
+	return &Publisher{cfg: cfg, logger: logger}
 }
 
 // Connect establishes the MQTT connection, retrying until successful or ctx is cancelled.
 // On each (re)connect, HA discovery payloads are republished automatically.
-func (p *MQTTPublisher) Connect(ctx context.Context) error {
-	opts := mqtt.NewClientOptions().
+func (p *Publisher) Connect(ctx context.Context) error {
+	opts := paho.NewClientOptions().
 		AddBroker(fmt.Sprintf("tcp://%s:1883", p.cfg.MQTTHost)).
 		SetClientID("emu2mqtt").
 		SetUsername(p.cfg.MQTTUser).
 		SetPassword(p.cfg.MQTTPass).
 		SetAutoReconnect(true).
-		SetConnectionLostHandler(func(_ mqtt.Client, err error) {
+		SetConnectionLostHandler(func(_ paho.Client, err error) {
 			p.logger.Warn("MQTT connection lost", "err", err)
 		}).
-		SetOnConnectHandler(func(_ mqtt.Client) {
+		SetOnConnectHandler(func(_ paho.Client) {
 			p.logger.Info("MQTT connected, publishing discovery")
 			if err := p.PublishDiscovery(); err != nil {
 				p.logger.Warn("discovery publish failed", "err", err)
 			}
 		})
 
-	p.client = mqtt.NewClient(opts)
+	p.client = paho.NewClient(opts)
 
 	delay := time.Second
 	for {
@@ -105,7 +106,7 @@ func (p *MQTTPublisher) Connect(ctx context.Context) error {
 }
 
 // PublishDiscovery sends retained HA auto-discovery config messages for all sensors.
-func (p *MQTTPublisher) PublishDiscovery() error {
+func (p *Publisher) PublishDiscovery() error {
 	device := haDevice{
 		Identifiers:  []string{"device_id"},
 		Name:         "Rainforest-EMU-2",
@@ -136,7 +137,7 @@ func (p *MQTTPublisher) PublishDiscovery() error {
 }
 
 // PublishState sends a state update for the named sensor.
-func (p *MQTTPublisher) PublishState(sensorName string, value float64) error {
+func (p *Publisher) PublishState(sensorName string, value float64) error {
 	payload := strconv.FormatFloat(value, 'f', -1, 64)
 	token := p.client.Publish(p.stateTopic(sensorName), 0, false, payload)
 	token.Wait()
@@ -147,10 +148,10 @@ func (p *MQTTPublisher) PublishState(sensorName string, value float64) error {
 	return nil
 }
 
-func (p *MQTTPublisher) configTopic(sensorName string) string {
+func (p *Publisher) configTopic(sensorName string) string {
 	return fmt.Sprintf("%s/sensor/emu2/%s/config", p.cfg.DiscoveryPrefix, sensorName)
 }
 
-func (p *MQTTPublisher) stateTopic(sensorName string) string {
+func (p *Publisher) stateTopic(sensorName string) string {
 	return fmt.Sprintf("%s/sensor/emu2/%s/state", p.cfg.DiscoveryPrefix, sensorName)
 }

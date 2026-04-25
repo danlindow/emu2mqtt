@@ -6,10 +6,14 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/danlindow/emu2mqtt/pkg/config"
+	"github.com/danlindow/emu2mqtt/pkg/mqtt"
+	"github.com/danlindow/emu2mqtt/pkg/serial"
 )
 
 func main() {
-	cfg, err := LoadConfig()
+	cfg, err := config.LoadConfig()
 	if err != nil {
 		slog.Error("configuration error", "err", err)
 		os.Exit(1)
@@ -27,14 +31,14 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer cancel()
 
-	publisher := NewMQTTPublisher(cfg, logger)
+	publisher := mqtt.NewPublisher(cfg, logger)
 	if err := publisher.Connect(ctx); err != nil {
 		logger.Error("MQTT connect failed", "err", err)
 		os.Exit(1)
 	}
 
-	metrics := make(chan Metric, 10)
-	reader := NewSerialReader(cfg, metrics, logger)
+	metrics := make(chan serial.Metric, 10)
+	reader := serial.NewReader(cfg, metrics, logger)
 	go reader.Run(ctx)
 
 	for {
