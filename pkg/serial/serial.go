@@ -19,6 +19,7 @@ import (
 // All numeric fields are hex strings (e.g. "0x000254").
 type instantaneousDemand struct {
 	XMLName     xml.Name `xml:"InstantaneousDemand"`
+	DeviceMacId string   `xml:"DeviceMacId"`
 	Demand      string   `xml:"Demand"`
 	Multiplier  string   `xml:"Multiplier"`
 	Divisor     string   `xml:"Divisor"`
@@ -29,6 +30,7 @@ type instantaneousDemand struct {
 // All numeric fields are hex strings.
 type currentSummationDelivered struct {
 	XMLName            xml.Name `xml:"CurrentSummationDelivered"`
+	DeviceMacId        string   `xml:"DeviceMacId"`
 	SummationDelivered string   `xml:"SummationDelivered"`
 	Multiplier         string   `xml:"Multiplier"`
 	Divisor            string   `xml:"Divisor"`
@@ -37,8 +39,9 @@ type currentSummationDelivered struct {
 
 // Metric is a parsed, computed reading ready for MQTT publication.
 type Metric struct {
-	SensorName string
-	Value      float64
+	SensorName  string
+	Value       float64
+	DeviceMacID string // raw hex from DeviceMacId field, e.g. "0xd8d5b9000000c28c"
 }
 
 // parseHex converts a "0x..."-prefixed hex string to int64.
@@ -89,7 +92,7 @@ func parseMessage(buf string) (*Metric, error) {
 		if err != nil {
 			return nil, fmt.Errorf("compute InstantaneousDemand: %w", err)
 		}
-		return &Metric{SensorName: "HomeCurrentDemand", Value: val}, nil
+		return &Metric{SensorName: "HomeCurrentDemand", Value: val, DeviceMacID: msg.DeviceMacId}, nil
 	}
 	if strings.Contains(buf, "<CurrentSummationDelivered>") {
 		var msg currentSummationDelivered
@@ -100,7 +103,7 @@ func parseMessage(buf string) (*Metric, error) {
 		if err != nil {
 			return nil, fmt.Errorf("compute CurrentSummationDelivered: %w", err)
 		}
-		return &Metric{SensorName: "HomeEnergyUsage", Value: val}, nil
+		return &Metric{SensorName: "HomeEnergyUsage", Value: val, DeviceMacID: msg.DeviceMacId}, nil
 	}
 	return nil, nil
 }
@@ -202,6 +205,8 @@ func (r *Reader) readLoop(ctx context.Context, port goserial.Port) {
 				case <-ctx.Done():
 					return
 				}
+			} else {
+				r.logger.Debug("unsupported message type", "raw", raw)
 			}
 		}
 	}
