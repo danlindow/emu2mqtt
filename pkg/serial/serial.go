@@ -118,15 +118,13 @@ func NewReader(cfg *config.Config, metrics chan<- Metric, logger *slog.Logger) *
 }
 
 // Run opens the serial port and reads forever, reconnecting on error.
-// Blocks until ctx is cancelled.
+// Blocks until ctx is cancelled. Reconnect backoff is handled by openPort.
 func (r *Reader) Run(ctx context.Context) {
-	delay := time.Second
 	for {
 		port, err := r.openPort(ctx)
 		if err != nil {
 			return // ctx cancelled
 		}
-		delay = time.Second // reset backoff on successful open
 
 		done := make(chan struct{})
 		go func() {
@@ -143,15 +141,7 @@ func (r *Reader) Run(ctx context.Context) {
 			port.Close()
 		}
 
-		r.logger.Warn("serial disconnected, reconnecting", "delay", delay)
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(delay):
-			if delay < 30*time.Second {
-				delay *= 2
-			}
-		}
+		r.logger.Warn("serial disconnected, reconnecting")
 	}
 }
 
