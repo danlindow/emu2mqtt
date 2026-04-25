@@ -41,12 +41,17 @@ func main() {
 	reader := serial.NewReader(cfg, metrics, logger)
 	go reader.Run(ctx)
 
+	deviceIDSet := false
 	for {
 		select {
 		case <-ctx.Done():
 			logger.Info("shutting down")
 			return
 		case m := <-metrics:
+			if !deviceIDSet && m.DeviceMacID != "" {
+				publisher.UpdateDeviceID(m.DeviceMacID)
+				deviceIDSet = true
+			}
 			logger.Info("metric received", "sensor", m.SensorName, "value", m.Value)
 			if err := publisher.PublishState(m.SensorName, m.Value); err != nil {
 				logger.Warn("publish state error", "err", err)

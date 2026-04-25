@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/danlindow/emu2mqtt/pkg/config"
@@ -52,14 +54,43 @@ var sensors = []sensorDef{
 
 // Publisher manages the MQTT connection and publishes HA discovery and state messages.
 type Publisher struct {
-	cfg    *config.Config
-	client paho.Client
-	logger *slog.Logger
+	cfg      *config.Config
+	client   paho.Client
+	logger   *slog.Logger
+	mu       sync.Mutex
+	deviceID string // set from DeviceMacId once first metric arrives
 }
 
 // NewPublisher creates a Publisher. Call Connect before publishing.
 func NewPublisher(cfg *config.Config, logger *slog.Logger) *Publisher {
 	return &Publisher{cfg: cfg, logger: logger}
+}
+
+// UpdateDeviceID sets the HA device identifier from the EMU-2 MAC address and
+// republishes discovery so Home Assistant updates its device registry.
+// Safe to call from any goroutine; no-ops if the MAC hasn't changed.
+func (p *Publisher) UpdateDeviceID(rawMAC string) {
+	mac := strings.TrimPrefix(strings.TrimPrefix(rawMAC, "0x"), "0X")
+	p.mu.Lock()
+	if p.deviceID == mac {
+		p.mu.Unlock()
+		return
+	}
+	p.deviceID = mac
+	p.mu.Unlock()
+	p.logger.Info("device MAC identified, republishing discovery", "mac", mac)
+	if err := p.PublishDiscovery(); err != nil {
+		p.logger.Warn("discovery republish failed", "err", err)
+	}
+}
+
+func (p *Publisher) getDeviceID() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.deviceID == "" {
+		return "device_id"
+	}
+	return p.deviceID
 }
 
 // Connect establishes the MQTT connection, retrying until successful or ctx is cancelled.
@@ -108,7 +139,7 @@ func (p *Publisher) Connect(ctx context.Context) error {
 // PublishDiscovery sends retained HA auto-discovery config messages for all sensors.
 func (p *Publisher) PublishDiscovery() error {
 	device := haDevice{
-		Identifiers:  []string{"device_id"},
+		Identifiers:  []string{p.getDeviceID()},
 		Name:         "Rainforest-EMU-2",
 		Manufacturer: "Rainforest Automation",
 		Model:        "EMU-2",
