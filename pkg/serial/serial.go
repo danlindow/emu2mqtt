@@ -137,11 +137,11 @@ func (r *Reader) Run(ctx context.Context) {
 
 		select {
 		case <-ctx.Done():
-			port.Close()
+			_ = port.Close()
 			<-done
 			return
 		case <-done:
-			port.Close()
+			_ = port.Close()
 		}
 
 		r.logger.Warn("serial disconnected, reconnecting")
